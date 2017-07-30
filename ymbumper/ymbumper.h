@@ -161,6 +161,7 @@ int SetSerialNo( unsigned char *command, unsigned long *arg );
 int SetThresh( unsigned char *command, unsigned long *arg );
 int SetDist( unsigned char *command, unsigned long *arg );
 int SetRes( unsigned char *command, unsigned long *arg );
+int SetFrt( unsigned char *command, unsigned long *arg );
 
 int main( void );
 

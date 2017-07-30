@@ -3,6 +3,8 @@
  * Compiler          : GCC
  *
  * Copyright (C) Atsushi Watanabe, 2010
+ *
+ * The authors of the library and template of the code:
  * Copyright (C) 2009-2010 Justin Mattair
  * Copyright (C) Dean Camera, 2009-2010
  *
@@ -43,16 +45,22 @@ CDC_Line_Coding_t LineCoding = {
 	.DataBits    = 8
 };
 
-#define COM_NUM		22
+#define COM_NUM		28
 const Scip2CommandType scip2[ COM_NUM + 1 ] =
 {
 	{ "VV", { 0 },					ScipVV },
 	{ "PP", { 0 },					ScipPP },
 	{ "II", { 0 },					ScipII },
 	{ "MD", { 4, 4, 2, 1, 2, 0 },	ScipMeasure },
-	{ "GD", { 4, 4, 2, 0 },			ScipGet },
 	{ "MS", { 4, 4, 2, 1, 2, 0 },	ScipMeasure },
+	{ "GD", { 4, 4, 2, 0 },			ScipGet },
 	{ "GS", { 4, 4, 2, 0 },			ScipGet },
+	{ "MR", { 4, 4, 2, 1, 2, 0 },	ScipMeasure },
+	{ "ME", { 4, 4, 2, 1, 2, 0 },	ScipMeasure },
+	{ "MI", { 4, 4, 2, 1, 2, 0 },	ScipMeasure },
+	{ "GR", { 4, 4, 2, 0 },			ScipGet },
+	{ "GE", { 4, 4, 2, 0 },			ScipGet },
+	{ "GI", { 4, 4, 2, 0 },			ScipGet },
 	{ "BM", { 0 },					ScipBM },
 	{ "QT", { 0 },					ScipQT },
 	{ "TM", { 1, 0 },				ScipTM },
@@ -67,18 +75,23 @@ const Scip2CommandType scip2[ COM_NUM + 1 ] =
 	{ "$STH",{ 3 },					SetThresh },
 	{ "$SDI",{ 4 },					SetDist },
 	{ "$SRE",{ 3 },					SetRes },
+	{ "$SFR",{ 3 },					SetFrt },
 	{ "\0", { 0 },					NULL }
 };
 
 #define SERIALNO_LEN	16
 static int8_t serialno_eep[SERIALNO_LEN] EEMEM = { "000000\0" };
-static uint8_t thresh_eep[SERIALNO_LEN] EEMEM = { 16 };
-static uint8_t res_eep[SERIALNO_LEN] EEMEM = { 8 };
-static uint8_t dist_eep[SERIALNO_LEN] EEMEM = { 10 };
+static uint8_t thresh_eep[1] EEMEM = { 16 };
+static int8_t res_eep[1] EEMEM = { -1 };
+static uint8_t dist_eep[1] EEMEM = { 10 };
+static int8_t frt_eep[1] EEMEM = { -1 };
 int8_t serialno[SERIALNO_LEN];
 uint8_t thresh;
-uint8_t res;
+int8_t res;
+int8_t frt;
 uint16_t dist;
+uint8_t amax;
+int8_t array_offset;
 
 uint16_t Raw[8];
 int16_t Data[8];
@@ -95,12 +108,15 @@ uint8_t RawMode;
 uint16_t MDStart;
 uint16_t MDEnd;
 uint16_t MDEnc;
+uint16_t INTEnc;
 uint8_t cMDEnc;
 uint16_t MDStep;
 uint16_t iMDStep;
 uint16_t MDCull;
 uint16_t MDNum;
 uint16_t iMDNum;
+
+uint8_t board_version;
 
 
 const uint8_t adc_ch[8] = { ADC_CHANNEL0, ADC_CHANNEL1, ADC_CHANNEL4, ADC_CHANNEL5, 
@@ -162,8 +178,10 @@ int ScipPP( uint8_t *command, uint32_t *arg )
 	sprintf( (char*)serial, PP_ARES_FMT, res );
 	sendScipResponse( (uint8_t *)serial );
 	sendScipResponseF( PP_AMIN );
-	sendScipResponseF( PP_AMAX );
-	sendScipResponseF( PP_AFRT );
+	sprintf( (char*)serial, PP_AMAX_FMT, amax );
+	sendScipResponse( (uint8_t *)serial );
+	sprintf( (char*)serial, PP_AFRT_FMT, frt );
+	sendScipResponse( (uint8_t *)serial );
 	sendScipResponseF( PP_SCAN );
 	sendUSBByte( '\n' );
 	flushSendStream();
@@ -188,7 +206,7 @@ int ScipII( uint8_t *command, uint32_t *arg )
 int ScipMeasure( uint8_t *command, uint32_t *arg )
 {
 	sendScipEchoBack( command );
-	if( arg[0] < 0 || arg[1] >= 8 ){
+	if( arg[0] < 0 || arg[1] > amax ){
 		sendScipResponse( (uint8_t *)"04" );
 		sendUSBByte( '\n' );
 		flushSendStream();
@@ -205,11 +223,20 @@ int ScipMeasure( uint8_t *command, uint32_t *arg )
 	flushSendStream();
 	if( command[1] == (uint8_t)'S' ){
 		MDEnc = 2;
-		cMDEnc = 'S';
 	}else{
 		MDEnc = 3;
-		cMDEnc = 'D';
 	}
+	cMDEnc = command[1];
+	if( command[1] == (uint8_t)'R' ){
+		INTEnc = 2;
+	}else if( command[1] == (uint8_t)'E' ){
+		INTEnc = 3;
+	}else if( command[1] == (uint8_t)'I' ){
+		INTEnc = 4;
+	}else{
+		INTEnc = 0;
+	}
+
 	MDStart = arg[0];
 	MDEnd   = arg[1];
 	MDCull  = arg[2];
@@ -244,7 +271,7 @@ int ScipGet( uint8_t *command, uint32_t *arg )
 	uint32_t out[6];
 	
 	sendScipEchoBack( command );
-	if( arg[0] < 0 || arg[1] >= 8 ){
+	if( arg[0] < 0 || arg[1] > amax ){
 		sendScipResponse( (uint8_t *)"04" );
 		sendUSBByte( '\n' );
 		flushSendStream();
@@ -259,11 +286,27 @@ int ScipGet( uint8_t *command, uint32_t *arg )
 	sendScipResponse( (uint8_t *)"00" );
 	sendScipData( &Timestamp, 1, 4 );
 	len = ProcessDistance( out, Distance, arg[0], arg[1], arg[2] );
-	if( command[1] == (uint8_t)'S' ){
-		sendScipData( Distance, len, 2 );
-	}else{
-		sendScipData( Distance, len, 3 );
+	switch( command[1] )
+	{
+	case (uint8_t)'S':
+		sendScipData( Distance + array_offset, len, 2 );
+		break;
+	case (uint8_t)'D':
+		sendScipData( Distance + array_offset, len, 3 );
+		break;
+	case (uint8_t)'R':
+		sendScipDataInt( Distance + array_offset, Raw + array_offset, len, 3, 2 );
+		break;
+	case (uint8_t)'E':
+		sendScipDataInt( Distance + array_offset, Raw + array_offset, len, 3, 3 );
+		break;
+	case (uint8_t)'I':
+		sendScipDataInt( Distance + array_offset, Raw + array_offset, len, 3, 4 );
+		break;
+	default:
+		break;
 	}
+
 	sendUSBByte( '\n' );
 	flushSendStream();
 	
@@ -423,6 +466,19 @@ int SetRes( uint8_t *command, uint32_t *arg )
 	
 	return 1;
 }
+int SetFrt( uint8_t *command, uint32_t *arg )
+{
+	sendScipEchoBack( command );
+	sendScipResponse( (uint8_t *)"03" );
+	sendUSBByte( '\n' );
+	flushSendStream();
+	
+	frt = arg[0];
+	eeprom_busy_wait();
+	eeprom_write_byte( (uint8_t*)&frt_eep, frt );
+	
+	return 1;
+}
 int SetDist( uint8_t *command, uint32_t *arg )
 {
 	uint8_t i;
@@ -450,6 +506,29 @@ int main( void )
 	/* This only sets up hardware not already setup in the bootloader */
 	SetupHardware();
 
+	if( PIND & 0x01 )
+	{
+		board_version = 16;
+	}
+	else
+	{
+		board_version = 17;
+	}
+	switch( board_version )
+	{
+	case 16:
+		amax = 7;
+		array_offset = 0;
+		break;
+	case 17:
+		amax = 3;
+		array_offset = 4;
+		break;
+	default:
+		amax = 0;
+		break;
+	}
+
 	iScan = 0;
 	iScanPrev = 0;
 	Timestamp = 0;
@@ -461,10 +540,31 @@ int main( void )
 	}
 	eeprom_busy_wait();
 	thresh = eeprom_read_byte( (uint8_t*)&thresh_eep );
+	eeprom_busy_wait();
 	res = eeprom_read_byte( (uint8_t*)&res_eep );
+	eeprom_busy_wait();
+	frt = eeprom_read_byte( (uint8_t*)&frt_eep );
 	for( i = 0; i < 2; i ++ ){
 		eeprom_busy_wait();
 		((uint8_t*)&dist)[i] = eeprom_read_byte( (uint8_t*)&((uint8_t*)&dist_eep)[i] );
+	}
+
+	if( frt < 0 ){
+		switch( board_version )
+		{
+		case 16:
+			frt = 4;
+			res = 8;
+			break;
+		case 17:
+			frt = 2;
+			res = 4;
+			break;
+		default:
+			frt = 0;
+			res = 0;
+			break;
+		}
 	}
 
 	for( i = 0; i < 8; i++ ){
@@ -513,7 +613,11 @@ int main( void )
 					sendScipResponse( (uint8_t *)"99" );
 					sendScipData( &Timestamp, 1, 4 );
 					len = ProcessDistance( out, Distance, MDStart, MDEnd, MDCull );
-					sendScipData( Distance, len, MDEnc );
+					if( INTEnc == 0 ){
+						sendScipData( Distance + array_offset, len, MDEnc );
+					}else{
+						sendScipDataInt( Distance + array_offset, Raw + array_offset, len, MDEnc, INTEnc );
+					}
 					sendUSBByte( '\n' );
 					flushSendStream();
 				}
@@ -605,8 +709,9 @@ void SetupHardware(void)
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
 	
-	MCUCR |= (1 << PUD) | (1 << JTD);
+	MCUCR &= ~(1 << PUD);
 	MCUCR |= (1 << JTD);
+	PORTD = 0x01;
 	
 	/* Set cpu prescaler based on crystal frequency */
 #if (F_CLOCK == F_CPU)

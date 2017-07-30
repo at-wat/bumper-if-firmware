@@ -53,7 +53,7 @@ void sendScipResponseF( const char *data )
 	sendUSBByte( '\n' );
 }
 
-void sendScipData( unsigned long *data, int len, unsigned char enc )
+void sendScipData( uint32_t *data, int len, unsigned char enc )
 {
 	static const unsigned long enc_mask[4] = { 0x3F, 0xFFF, 0x3FFFF, 0xFFFFFF };
 	unsigned char buf[68];
@@ -82,6 +82,60 @@ void sendScipData( unsigned long *data, int len, unsigned char enc )
 				*pbuf = 0;
 				sendScipResponse( buf );
 				pbuf = buf;
+			}
+		}
+	}
+	if( pbuf != buf ){
+		*pbuf = 0;
+		sendScipResponse( buf );
+	}
+}
+
+void sendScipDataInt( uint32_t *data, uint16_t *data_int,
+		int len, unsigned char enc_dist, unsigned char enc_int )
+{
+	static const unsigned long enc_mask[4] = { 0x3F, 0xFFF, 0x3FFFF, 0xFFFFFF };
+	unsigned char buf[80];
+	unsigned char *pbuf;
+	
+	pbuf = buf;
+	for( ; len > 0; len -- ){
+		char type;
+		for( type = 0; type < 2; type ++ )
+		{
+			unsigned long tmp;
+			unsigned char i;
+			unsigned char encorded[4];
+			unsigned char enc;
+			
+			if( type == 0 )
+			{
+				tmp = *data;
+				data ++;
+				enc = enc_dist;
+			}
+			else
+			{
+				tmp = *data_int;
+				data_int ++;
+				enc = enc_int;
+			}
+			if( tmp > enc_mask[enc-1] ){
+				// オーバーフロー
+				tmp = enc_mask[enc-1];
+			}
+			for( i = 0; i < enc; i++ ){
+				encorded[enc-1-i] = ( tmp & 0x3F ) + 0x30;
+				tmp = tmp >> 6;
+			}
+			for( i = 0; i < enc; i++ ){
+				*pbuf = encorded[i];
+				pbuf ++;
+				if( pbuf - buf >= 64 ){
+					*pbuf = 0;
+					sendScipResponse( buf );
+					pbuf = buf;
+				}
 			}
 		}
 	}
