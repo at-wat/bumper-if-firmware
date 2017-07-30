@@ -83,13 +83,14 @@ const Scip2CommandType scip2[ COM_NUM + 1 ] =
 static int8_t serialno_eep[SERIALNO_LEN] EEMEM = { "000000\0" };
 static uint8_t thresh_eep[1] EEMEM = { 16 };
 static int8_t res_eep[1] EEMEM = { -1 };
-static uint8_t dist_eep[1] EEMEM = { 10 };
+static uint16_t dist_eep[1] EEMEM = { 10 };
 static int8_t frt_eep[1] EEMEM = { -1 };
 int8_t serialno[SERIALNO_LEN];
 uint8_t thresh;
 int8_t res;
-int8_t frt;
 uint16_t dist;
+int8_t frt;
+
 uint8_t amax;
 int8_t array_offset;
 
