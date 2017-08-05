@@ -1,8 +1,12 @@
 #include <avr/eeprom.h>
 
+#ifndef FIRM_VER
+#define FIRM_VER "DEBUG_VER"
+#endif
+
 const char VV_VEND[] PROGMEM = "VEND:Atsushi Watanabe;";
 const char VV_PROD[] PROGMEM = "PROD:Bumper Interface;";
-const char VV_FIRM[] PROGMEM = "FIRM:2017.07.30;";
+const char VV_FIRM[] PROGMEM = "FIRM:" FIRM_VER ";";
 const char VV_PROT[] PROGMEM = "PROT:SCIP 2.1;";
 const char VV_SERI_FMT[] = "SERI:%s;";
 

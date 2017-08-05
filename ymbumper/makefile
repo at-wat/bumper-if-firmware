@@ -68,6 +68,7 @@ MCU = atmega32u4
 # "Board" inside the application directory.
 #BOARD = 
 
+FIRM_VER = `git rev-parse --short HEAD`
 
 # Processor frequency.
 #     This will define a symbol, F_CPU, in all source code files equal to the 
@@ -199,6 +200,7 @@ CSTANDARD = -std=gnu99
 
 # Place -D or -U options here for C sources
 CDEFS  = -DF_CPU=$(F_CPU)UL -DF_CLOCK=$(F_CLOCK)UL -DBOARD=BOARD_$(BOARD) -DTERMINAL_BUFFER_SIZE=$(TERMINAL_BUFFER_SIZE) $(LUFA_OPTS)
+CDEFS += -DFIRM_VER=\"$(FIRM_VER)\"
 
 
 # Place -D or -U options here for ASM sources
@@ -209,7 +211,6 @@ ADEFS = -DF_CPU=$(F_CPU)
 CPPDEFS = -DF_CPU=$(F_CPU)UL
 #CPPDEFS += -D__STDC_LIMIT_MACROS
 #CPPDEFS += -D__STDC_CONSTANT_MACROS
-
 
 
 #---------------- Compiler Options C ----------------
