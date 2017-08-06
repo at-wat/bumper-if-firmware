@@ -380,7 +380,10 @@ int ScipReset( uint8_t *command, uint32_t *arg )
 	sendUSBByte( '\n' );
 	flushSendStream();
 	
-	if( command[1] == 'B' ) goto *0;
+	if( command[1] == 'B' ){
+		wdt_enable(WDTO_1S);
+		while(1);
+	}
 	
 	if( command[1] == 'S' ){
 		char i;
